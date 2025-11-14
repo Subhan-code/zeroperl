@@ -42,6 +42,9 @@ jobs:
         with:
           clean: true
 
+      - name: Disable man-db auto-update
+        run: sudo rm -f /var/lib/man-db/auto-update
+
       - name: Create /zeroperl directory
         run: |
           sudo mkdir -p /zeroperl
