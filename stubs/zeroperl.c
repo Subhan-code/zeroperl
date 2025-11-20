@@ -25,9 +25,9 @@
 //! Export macro for public API functions - combines export_name for WASI with
 //! visibility attribute
 #if defined(__WASI__) || defined(__wasi__)
-#define ZEROPERL_API(name) \
+#define ZEROPERL_API(name)                                                     \
   __attribute__((export_name(name))) __attribute__((visibility("default")))
-#define ZEROPERL_IMPORT(name) \
+#define ZEROPERL_IMPORT(name)                                                  \
   __attribute__((import_module("env"))) __attribute__((import_name(name)))
 #else
 #define ZEROPERL_API(name) __attribute__((visibility("default")))
@@ -598,13 +598,13 @@ static void zeroperl_clear_error_internal(void) {
 //! XS callback that dispatches to host functions
 static XS(xs_host_dispatch) {
   dXSARGS;
-  
+
   if (!items) {
     croak("No magic value found for host function");
   }
-  
+
   int32_t func_id = (int32_t)CvXSUBANY(cv).any_i32;
-  
+
   zeroperl_value **argv = NULL;
   if (items > 0) {
     argv = (zeroperl_value **)malloc(sizeof(zeroperl_value *) * items);
@@ -614,9 +614,9 @@ static XS(xs_host_dispatch) {
       SvREFCNT_inc(argv[i]->sv);
     }
   }
-  
+
   zeroperl_value *result = host_call_function(func_id, items, argv);
-  
+
   if (argv) {
     for (int i = 0; i < items; i++) {
       SvREFCNT_dec(argv[i]->sv);
@@ -624,14 +624,12 @@ static XS(xs_host_dispatch) {
     }
     free(argv);
   }
-  
-  XSRETURN_UNDEF;
-  
+
   if (result && result->sv) {
     ST(0) = sv_2mortal(SvREFCNT_inc(result->sv));
     XSRETURN(1);
   }
-  
+
   XSRETURN_UNDEF;
 }
 
@@ -658,8 +656,8 @@ static int zeroperl_init_callback(int argc, char **argv) {
   PL_exit_flags &= ~PERL_EXIT_DESTRUCT_END;
 
   if (ctx->data.init.argc > 0 && ctx->data.init.argv) {
-    if (perl_parse(zero_perl, xs_init, ctx->data.init.argc, 
-                   ctx->data.init.argv, environ) != 0) {
+    if (perl_parse(zero_perl, xs_init, ctx->data.init.argc, ctx->data.init.argv,
+                   environ) != 0) {
       zeroperl_capture_error();
       ctx->result = 1;
       return 1;
@@ -713,16 +711,16 @@ static int zeroperl_eval_callback(int argc, char **argv) {
 
   I32 gimme;
   switch (ctx->data.eval.context) {
-    case ZEROPERL_VOID:
-      gimme = G_VOID;
-      break;
-    case ZEROPERL_LIST:
-      gimme = G_ARRAY;
-      break;
-    case ZEROPERL_SCALAR:
-    default:
-      gimme = G_SCALAR;
-      break;
+  case ZEROPERL_VOID:
+    gimme = G_VOID;
+    break;
+  case ZEROPERL_LIST:
+    gimme = G_ARRAY;
+    break;
+  case ZEROPERL_SCALAR:
+  default:
+    gimme = G_SCALAR;
+    break;
   }
 
   SV *result = eval_pv(ctx->data.eval.code, FALSE);
@@ -775,7 +773,8 @@ static int zeroperl_run_file_callback(int argc, char **argv) {
   }
 
   char eval_code[512];
-  snprintf(eval_code, sizeof(eval_code), "do '%s'", ctx->data.run_file.filepath);
+  snprintf(eval_code, sizeof(eval_code), "do '%s'",
+           ctx->data.run_file.filepath);
 
   SV *result = eval_pv(eval_code, FALSE);
 
@@ -810,8 +809,8 @@ static int zeroperl_reset_callback(int argc, char **argv) {
   zero_perl_can_evaluate = false;
 
   if (ctx->data.init.argc > 0 && ctx->data.init.argv) {
-    if (perl_parse(zero_perl, xs_init, ctx->data.init.argc,
-                   ctx->data.init.argv, environ) != 0) {
+    if (perl_parse(zero_perl, xs_init, ctx->data.init.argc, ctx->data.init.argv,
+                   environ) != 0) {
       zeroperl_capture_error();
       ctx->result = 1;
       return 1;
@@ -838,11 +837,11 @@ static int zeroperl_reset_callback(int argc, char **argv) {
 }
 
 //! Initialize the Perl interpreter
-//! 
+//!
 //! Performs complete Perl system initialization and creates an interpreter
 //! ready for interactive evaluation. After this function succeeds, you can
 //! call zeroperl_eval() to evaluate Perl code.
-//! 
+//!
 //! Returns 0 on success, non-zero on error.
 ZEROPERL_API("zeroperl_init")
 int zeroperl_init(void) {
@@ -850,19 +849,17 @@ int zeroperl_init(void) {
     return 0;
   }
 
-  zeroperl_context ctx = {
-    .op_type = ZEROPERL_OP_INIT,
-    .result = 0,
-    .data.init = {.argc = 0, .argv = NULL}
-  };
+  zeroperl_context ctx = {.op_type = ZEROPERL_OP_INIT,
+                          .result = 0,
+                          .data.init = {.argc = 0, .argv = NULL}};
   return asyncjmp_rt_start(zeroperl_init_callback, 0, (char **)&ctx);
 }
 
 //! Initialize the Perl interpreter with command-line arguments
-//! 
+//!
 //! Alternative to zeroperl_init() for when you want to run a complete Perl
 //! program from a file or with command-line arguments.
-//! 
+//!
 //! Returns 0 on success, non-zero on error.
 ZEROPERL_API("zeroperl_init_with_args")
 int zeroperl_init_with_args(int argc, char **argv) {
@@ -874,24 +871,22 @@ int zeroperl_init_with_args(int argc, char **argv) {
     return zeroperl_init();
   }
 
-  zeroperl_context ctx = {
-    .op_type = ZEROPERL_OP_INIT,
-    .result = 0,
-    .data.init = {.argc = argc, .argv = argv}
-  };
+  zeroperl_context ctx = {.op_type = ZEROPERL_OP_INIT,
+                          .result = 0,
+                          .data.init = {.argc = argc, .argv = argv}};
   return asyncjmp_rt_start(zeroperl_init_callback, 0, (char **)&ctx);
 }
 
 //! Evaluate a string of Perl code
-//! 
+//!
 //! The interpreter must be initialized first. The code is evaluated with
 //! the specified context (void, scalar, or list). Optional arguments can
 //! be provided which will be available in @ARGV.
-//! 
+//!
 //! Returns 0 on success, non-zero on error.
 ZEROPERL_API("zeroperl_eval")
-int zeroperl_eval(const char *code, zeroperl_context_type context,
-                  int argc, char **argv) {
+int zeroperl_eval(const char *code, zeroperl_context_type context, int argc,
+                  char **argv) {
   if (!zero_perl || !zero_perl_can_evaluate) {
     return -1;
   }
@@ -901,23 +896,18 @@ int zeroperl_eval(const char *code, zeroperl_context_type context,
   }
 
   zeroperl_context ctx = {
-    .op_type = ZEROPERL_OP_EVAL,
-    .result = 0,
-    .data.eval = {
-      .code = code,
-      .argc = argc,
-      .argv = argv,
-      .context = context
-    }
-  };
+      .op_type = ZEROPERL_OP_EVAL,
+      .result = 0,
+      .data.eval = {
+          .code = code, .argc = argc, .argv = argv, .context = context}};
   return asyncjmp_rt_start(zeroperl_eval_callback, 0, (char **)&ctx);
 }
 
 //! Run a Perl program file
-//! 
+//!
 //! Loads and executes a Perl script file. Arguments can be provided which
 //! will be available in @ARGV.
-//! 
+//!
 //! Returns 0 on success, non-zero on error.
 ZEROPERL_API("zeroperl_run_file")
 int zeroperl_run_file(const char *filepath, int argc, char **argv) {
@@ -930,19 +920,14 @@ int zeroperl_run_file(const char *filepath, int argc, char **argv) {
   }
 
   zeroperl_context ctx = {
-    .op_type = ZEROPERL_OP_RUN_FILE,
-    .result = 0,
-    .data.run_file = {
-      .filepath = filepath,
-      .argc = argc,
-      .argv = argv
-    }
-  };
+      .op_type = ZEROPERL_OP_RUN_FILE,
+      .result = 0,
+      .data.run_file = {.filepath = filepath, .argc = argc, .argv = argv}};
   return asyncjmp_rt_start(zeroperl_run_file_callback, 0, (char **)&ctx);
 }
 
 //! Free the Perl interpreter
-//! 
+//!
 //! Destructs and frees the interpreter but leaves the Perl system initialized.
 //! After this, you can call zeroperl_init() again for a fresh interpreter.
 ZEROPERL_API("zeroperl_free_interpreter")
@@ -956,7 +941,7 @@ void zeroperl_free_interpreter(void) {
 }
 
 //! Complete system shutdown
-//! 
+//!
 //! Frees the interpreter and performs full Perl system cleanup.
 //! Should be called only once at program exit.
 ZEROPERL_API("zeroperl_shutdown")
@@ -970,7 +955,7 @@ void zeroperl_shutdown(void) {
 }
 
 //! Clear the error state ($@)
-//! 
+//!
 //! Clears both the internal error buffer and the Perl $@ variable.
 ZEROPERL_API("zeroperl_clear_error")
 void zeroperl_clear_error(void) {
@@ -979,10 +964,10 @@ void zeroperl_clear_error(void) {
 }
 
 //! Reset the interpreter to a clean state
-//! 
+//!
 //! Destructs and reconstructs the interpreter, clearing all Perl state.
 //! After reset, the interpreter is ready for eval() calls.
-//! 
+//!
 //! Returns 0 on success, non-zero on error.
 ZEROPERL_API("zeroperl_reset")
 int zeroperl_reset(void) {
@@ -995,39 +980,31 @@ int zeroperl_reset(void) {
 
   zeroperl_clear_error();
 
-  zeroperl_context ctx = {
-    .op_type = ZEROPERL_OP_RESET,
-    .result = 0,
-    .data.init = {.argc = 0, .argv = NULL}
-  };
+  zeroperl_context ctx = {.op_type = ZEROPERL_OP_RESET,
+                          .result = 0,
+                          .data.init = {.argc = 0, .argv = NULL}};
   return asyncjmp_rt_start(zeroperl_reset_callback, 0, (char **)&ctx);
 }
 
 //! Get the last error message from Perl ($@)
-//! 
+//!
 //! Returns an empty string if no error. The returned string is owned by
 //! zeroperl and valid until the next error occurs.
 ZEROPERL_API("zeroperl_last_error")
-const char *zeroperl_last_error(void) {
-  return zero_perl_error_buf;
-}
+const char *zeroperl_last_error(void) { return zero_perl_error_buf; }
 
 //! Check if the interpreter is currently initialized
 ZEROPERL_API("zeroperl_is_initialized")
-bool zeroperl_is_initialized(void) {
-  return zero_perl != NULL;
-}
+bool zeroperl_is_initialized(void) { return zero_perl != NULL; }
 
 //! Check if the interpreter is ready to evaluate code
 ZEROPERL_API("zeroperl_can_evaluate")
-bool zeroperl_can_evaluate(void) {
-  return zero_perl_can_evaluate;
-}
+bool zeroperl_can_evaluate(void) { return zero_perl_can_evaluate; }
 
 //! Flush STDOUT and STDERR buffers
-//! 
+//!
 //! Forces any buffered output to be written immediately.
-//! 
+//!
 //! Returns 0 on success, -1 if interpreter not initialized.
 ZEROPERL_API("zeroperl_flush")
 int zeroperl_flush(void) {
@@ -1106,7 +1083,7 @@ zeroperl_value *zeroperl_new_double(double d) {
 }
 
 //! Create a new string value (UTF-8)
-//! 
+//!
 //! If len is 0, strlen will be used to calculate the length.
 ZEROPERL_API("zeroperl_new_string")
 zeroperl_value *zeroperl_new_string(const char *str, size_t len) {
@@ -1165,7 +1142,7 @@ zeroperl_value *zeroperl_new_undef(void) {
 }
 
 //! Convert a value to an integer
-//! 
+//!
 //! Returns true on success, false if conversion failed.
 ZEROPERL_API("zeroperl_to_int")
 bool zeroperl_to_int(zeroperl_value *val, int32_t *out) {
@@ -1179,7 +1156,7 @@ bool zeroperl_to_int(zeroperl_value *val, int32_t *out) {
 }
 
 //! Convert a value to a double
-//! 
+//!
 //! Returns true on success, false if conversion failed.
 ZEROPERL_API("zeroperl_to_double")
 bool zeroperl_to_double(zeroperl_value *val, double *out) {
@@ -1193,7 +1170,7 @@ bool zeroperl_to_double(zeroperl_value *val, double *out) {
 }
 
 //! Convert a value to a UTF-8 string
-//! 
+//!
 //! The returned string is owned by the value and should not be freed.
 //! If len is not NULL, it will be set to the string length in bytes.
 ZEROPERL_API("zeroperl_to_string")
@@ -1205,11 +1182,11 @@ const char *zeroperl_to_string(zeroperl_value *val, size_t *len) {
   dTHX;
   STRLEN perl_len;
   const char *str = SvPVutf8(val->sv, perl_len);
-  
+
   if (len) {
     *len = perl_len;
   }
-  
+
   return str;
 }
 
@@ -1267,7 +1244,7 @@ zeroperl_type zeroperl_get_type(zeroperl_value *val) {
     } else if (type == SVt_PVCV) {
       return ZEROPERL_TYPE_CODE;
     }
-    
+
     return ZEROPERL_TYPE_REF;
   }
 
@@ -1309,7 +1286,7 @@ void zeroperl_decref(zeroperl_value *val) {
 }
 
 //! Free a value
-//! 
+//!
 //! Decrements the reference count and frees the handle structure.
 ZEROPERL_API("zeroperl_value_free")
 void zeroperl_value_free(zeroperl_value *val) {
@@ -1354,7 +1331,7 @@ void zeroperl_array_push(zeroperl_array *arr, zeroperl_value *val) {
 }
 
 //! Pop a value from the end of an array
-//! 
+//!
 //! Returns NULL if the array is empty. The caller must free the returned value.
 ZEROPERL_API("zeroperl_array_pop")
 zeroperl_value *zeroperl_array_pop(zeroperl_array *arr) {
@@ -1364,7 +1341,7 @@ zeroperl_value *zeroperl_array_pop(zeroperl_array *arr) {
 
   dTHX;
   SV *sv = av_pop(arr->av);
-  
+
   if (!sv || sv == &PL_sv_undef) {
     return NULL;
   }
@@ -1380,7 +1357,7 @@ zeroperl_value *zeroperl_array_pop(zeroperl_array *arr) {
 }
 
 //! Get a value from an array at the specified index
-//! 
+//!
 //! Returns NULL if the index is out of bounds. The returned value is a new
 //! handle and must be freed.
 ZEROPERL_API("zeroperl_array_get")
@@ -1391,7 +1368,7 @@ zeroperl_value *zeroperl_array_get(zeroperl_array *arr, size_t index) {
 
   dTHX;
   SSize_t top = av_top_index(arr->av);
-  
+
   if (index > (size_t)top) {
     return NULL;
   }
@@ -1411,10 +1388,11 @@ zeroperl_value *zeroperl_array_get(zeroperl_array *arr, size_t index) {
 }
 
 //! Set a value in an array at the specified index
-//! 
+//!
 //! Returns true on success, false on failure.
 ZEROPERL_API("zeroperl_array_set")
-bool zeroperl_array_set(zeroperl_array *arr, size_t index, zeroperl_value *val) {
+bool zeroperl_array_set(zeroperl_array *arr, size_t index,
+                        zeroperl_value *val) {
   if (!arr || !arr->av || !val || !val->sv) {
     return false;
   }
@@ -1448,7 +1426,7 @@ void zeroperl_array_clear(zeroperl_array *arr) {
 }
 
 //! Convert an array to a value
-//! 
+//!
 //! Creates a reference to the array. The caller must free the returned value.
 ZEROPERL_API("zeroperl_array_to_value")
 zeroperl_value *zeroperl_array_to_value(zeroperl_array *arr) {
@@ -1467,7 +1445,7 @@ zeroperl_value *zeroperl_array_to_value(zeroperl_array *arr) {
 }
 
 //! Convert a value to an array
-//! 
+//!
 //! Returns NULL if the value is not an array reference. The caller must free
 //! the returned array.
 ZEROPERL_API("zeroperl_value_to_array")
@@ -1477,7 +1455,7 @@ zeroperl_array *zeroperl_value_to_array(zeroperl_value *val) {
   }
 
   dTHX;
-  
+
   if (!SvROK(val->sv)) {
     return NULL;
   }
@@ -1529,10 +1507,11 @@ zeroperl_hash *zeroperl_new_hash(void) {
 }
 
 //! Set a value in a hash
-//! 
+//!
 //! Returns true on success, false on failure.
 ZEROPERL_API("zeroperl_hash_set")
-bool zeroperl_hash_set(zeroperl_hash *hash, const char *key, zeroperl_value *val) {
+bool zeroperl_hash_set(zeroperl_hash *hash, const char *key,
+                       zeroperl_value *val) {
   if (!hash || !hash->hv || !key || !val || !val->sv) {
     return false;
   }
@@ -1543,8 +1522,9 @@ bool zeroperl_hash_set(zeroperl_hash *hash, const char *key, zeroperl_value *val
 }
 
 //! Get a value from a hash
-//! 
-//! Returns NULL if the key doesn't exist. The caller must free the returned value.
+//!
+//! Returns NULL if the key doesn't exist. The caller must free the returned
+//! value.
 ZEROPERL_API("zeroperl_hash_get")
 zeroperl_value *zeroperl_hash_get(zeroperl_hash *hash, const char *key) {
   if (!hash || !hash->hv || !key) {
@@ -1553,7 +1533,7 @@ zeroperl_value *zeroperl_hash_get(zeroperl_hash *hash, const char *key) {
 
   dTHX;
   SV **svp = hv_fetch(hash->hv, key, strlen(key), 0);
-  
+
   if (!svp || !*svp) {
     return NULL;
   }
@@ -1579,7 +1559,7 @@ bool zeroperl_hash_exists(zeroperl_hash *hash, const char *key) {
 }
 
 //! Delete a key from a hash
-//! 
+//!
 //! Returns true if the key was deleted, false if it didn't exist.
 ZEROPERL_API("zeroperl_hash_delete")
 bool zeroperl_hash_delete(zeroperl_hash *hash, const char *key) {
@@ -1589,12 +1569,12 @@ bool zeroperl_hash_delete(zeroperl_hash *hash, const char *key) {
 
   dTHX;
   SV *sv = hv_delete(hash->hv, key, strlen(key), 0);
-  
+
   if (sv) {
     SvREFCNT_dec(sv);
     return true;
   }
-  
+
   return false;
 }
 
@@ -1610,7 +1590,7 @@ void zeroperl_hash_clear(zeroperl_hash *hash) {
 }
 
 //! Create a new hash iterator
-//! 
+//!
 //! The caller must free the iterator with zeroperl_hash_iter_free().
 ZEROPERL_API("zeroperl_hash_iter_new")
 zeroperl_hash_iter *zeroperl_hash_iter_new(zeroperl_hash *hash) {
@@ -1619,7 +1599,8 @@ zeroperl_hash_iter *zeroperl_hash_iter_new(zeroperl_hash *hash) {
   }
 
   dTHX;
-  zeroperl_hash_iter *iter = (zeroperl_hash_iter *)malloc(sizeof(zeroperl_hash_iter));
+  zeroperl_hash_iter *iter =
+      (zeroperl_hash_iter *)malloc(sizeof(zeroperl_hash_iter));
   if (!iter) {
     return NULL;
   }
@@ -1627,12 +1608,12 @@ zeroperl_hash_iter *zeroperl_hash_iter_new(zeroperl_hash *hash) {
   iter->hv = hash->hv;
   hv_iterinit(iter->hv);
   iter->entry = NULL;
-  
+
   return iter;
 }
 
 //! Get the next key-value pair from a hash iterator
-//! 
+//!
 //! Returns true if a pair was retrieved, false if the end was reached.
 //! The key string is owned by Perl and should not be freed. The value must
 //! be freed by the caller.
@@ -1645,7 +1626,7 @@ bool zeroperl_hash_iter_next(zeroperl_hash_iter *iter, const char **key,
 
   dTHX;
   iter->entry = hv_iternext(iter->hv);
-  
+
   if (!iter->entry) {
     return false;
   }
@@ -1657,12 +1638,12 @@ bool zeroperl_hash_iter_next(zeroperl_hash_iter *iter, const char **key,
 
   if (val) {
     SV *sv = hv_iterval(iter->hv, iter->entry);
-    
+
     zeroperl_value *value = (zeroperl_value *)malloc(sizeof(zeroperl_value));
     if (!value) {
       return false;
     }
-    
+
     value->sv = SvREFCNT_inc(sv);
     *val = value;
   }
@@ -1681,7 +1662,7 @@ void zeroperl_hash_iter_free(zeroperl_hash_iter *iter) {
 }
 
 //! Convert a hash to a value
-//! 
+//!
 //! Creates a reference to the hash. The caller must free the returned value.
 ZEROPERL_API("zeroperl_hash_to_value")
 zeroperl_value *zeroperl_hash_to_value(zeroperl_hash *hash) {
@@ -1700,7 +1681,7 @@ zeroperl_value *zeroperl_hash_to_value(zeroperl_hash *hash) {
 }
 
 //! Convert a value to a hash
-//! 
+//!
 //! Returns NULL if the value is not a hash reference. The caller must free
 //! the returned hash.
 ZEROPERL_API("zeroperl_value_to_hash")
@@ -1710,7 +1691,7 @@ zeroperl_hash *zeroperl_value_to_hash(zeroperl_value *val) {
   }
 
   dTHX;
-  
+
   if (!SvROK(val->sv)) {
     return NULL;
   }
@@ -1745,7 +1726,7 @@ void zeroperl_hash_free(zeroperl_hash *hash) {
 }
 
 //! Create a new reference to a value
-//! 
+//!
 //! The caller must free the returned value.
 ZEROPERL_API("zeroperl_new_ref")
 zeroperl_value *zeroperl_new_ref(zeroperl_value *val) {
@@ -1764,7 +1745,7 @@ zeroperl_value *zeroperl_new_ref(zeroperl_value *val) {
 }
 
 //! Dereference a value
-//! 
+//!
 //! Returns NULL if the value is not a reference. The caller must free the
 //! returned value.
 ZEROPERL_API("zeroperl_deref")
@@ -1774,7 +1755,7 @@ zeroperl_value *zeroperl_deref(zeroperl_value *ref) {
   }
 
   dTHX;
-  
+
   if (!SvROK(ref->sv)) {
     return NULL;
   }
@@ -1800,7 +1781,7 @@ bool zeroperl_is_ref(zeroperl_value *val) {
 }
 
 //! Get a global scalar variable
-//! 
+//!
 //! Returns NULL if the variable doesn't exist. The caller must free the
 //! returned value.
 ZEROPERL_API("zeroperl_get_var")
@@ -1811,7 +1792,7 @@ zeroperl_value *zeroperl_get_var(const char *name) {
 
   dTHX;
   SV *sv = get_sv(name, 0);
-  
+
   if (!sv) {
     return NULL;
   }
@@ -1826,7 +1807,7 @@ zeroperl_value *zeroperl_get_var(const char *name) {
 }
 
 //! Get a global array variable
-//! 
+//!
 //! Returns NULL if the variable doesn't exist. The caller must free the
 //! returned array.
 ZEROPERL_API("zeroperl_get_array_var")
@@ -1837,7 +1818,7 @@ zeroperl_array *zeroperl_get_array_var(const char *name) {
 
   dTHX;
   AV *av = get_av(name, 0);
-  
+
   if (!av) {
     return NULL;
   }
@@ -1852,7 +1833,7 @@ zeroperl_array *zeroperl_get_array_var(const char *name) {
 }
 
 //! Get a global hash variable
-//! 
+//!
 //! Returns NULL if the variable doesn't exist. The caller must free the
 //! returned hash.
 ZEROPERL_API("zeroperl_get_hash_var")
@@ -1863,7 +1844,7 @@ zeroperl_hash *zeroperl_get_hash_var(const char *name) {
 
   dTHX;
   HV *hv = get_hv(name, 0);
-  
+
   if (!hv) {
     return NULL;
   }
@@ -1878,7 +1859,7 @@ zeroperl_hash *zeroperl_get_hash_var(const char *name) {
 }
 
 //! Set a global scalar variable
-//! 
+//!
 //! Returns true on success, false on failure.
 ZEROPERL_API("zeroperl_set_var")
 bool zeroperl_set_var(const char *name, zeroperl_value *val) {
@@ -1888,7 +1869,7 @@ bool zeroperl_set_var(const char *name, zeroperl_value *val) {
 
   dTHX;
   SV *sv = get_sv(name, GV_ADD);
-  
+
   if (!sv) {
     return false;
   }
@@ -1898,7 +1879,7 @@ bool zeroperl_set_var(const char *name, zeroperl_value *val) {
 }
 
 //! Register a host function that can be called from Perl
-//! 
+//!
 //! The function will be available as a Perl subroutine with the given name.
 //! When called from Perl, it will invoke the host's call_host_function with
 //! the provided func_id.
@@ -1929,9 +1910,10 @@ void zeroperl_register_function(int32_t func_id, const char *name) {
 }
 
 //! Register a host method that can be called from Perl
-//! 
+//!
 //! The method will be available in the specified package. When called from
-//! Perl, it will invoke the host's call_host_function with the provided func_id.
+//! Perl, it will invoke the host's call_host_function with the provided
+//! func_id.
 ZEROPERL_API("zeroperl_register_method")
 void zeroperl_register_method(int32_t func_id, const char *package,
                               const char *method) {
@@ -1963,7 +1945,7 @@ void zeroperl_register_method(int32_t func_id, const char *package,
 }
 
 //! Call a Perl subroutine
-//! 
+//!
 //! Returns a result structure containing the return values. The caller must
 //! free the result with zeroperl_result_free().
 ZEROPERL_API("zeroperl_call")
@@ -1980,27 +1962,27 @@ zeroperl_result *zeroperl_call(const char *name, zeroperl_context_type context,
   SAVETMPS;
 
   PUSHMARK(SP);
-  
+
   for (int i = 0; i < argc; i++) {
     if (argv[i] && argv[i]->sv) {
       XPUSHs(sv_2mortal(SvREFCNT_inc(argv[i]->sv)));
     }
   }
-  
+
   PUTBACK;
 
   I32 gimme;
   switch (context) {
-    case ZEROPERL_VOID:
-      gimme = G_VOID;
-      break;
-    case ZEROPERL_LIST:
-      gimme = G_ARRAY;
-      break;
-    case ZEROPERL_SCALAR:
-    default:
-      gimme = G_SCALAR;
-      break;
+  case ZEROPERL_VOID:
+    gimme = G_VOID;
+    break;
+  case ZEROPERL_LIST:
+    gimme = G_ARRAY;
+    break;
+  case ZEROPERL_SCALAR:
+  default:
+    gimme = G_SCALAR;
+    break;
   }
 
   int count = call_pv(name, gimme);
@@ -2015,9 +1997,10 @@ zeroperl_result *zeroperl_call(const char *name, zeroperl_context_type context,
   }
 
   result->count = count;
-  
+
   if (count > 0) {
-    result->values = (zeroperl_value **)malloc(sizeof(zeroperl_value *) * count);
+    result->values =
+        (zeroperl_value **)malloc(sizeof(zeroperl_value *) * count);
     if (!result->values) {
       free(result);
       FREETMPS;
@@ -2046,7 +2029,7 @@ zeroperl_result *zeroperl_call(const char *name, zeroperl_context_type context,
 }
 
 //! Get a value from a result by index
-//! 
+//!
 //! Returns NULL if the index is out of bounds. The returned value is owned
 //! by the result and should not be freed directly.
 ZEROPERL_API("zeroperl_result_get")
@@ -2059,7 +2042,7 @@ zeroperl_value *zeroperl_result_get(zeroperl_result *result, int index) {
 }
 
 //! Free a result structure
-//! 
+//!
 //! Also frees all values contained in the result.
 ZEROPERL_API("zeroperl_result_free")
 void zeroperl_result_free(zeroperl_result *result) {
