@@ -2017,9 +2017,16 @@ zeroperl_result *zeroperl_call(const char *name, zeroperl_context_type context,
     break;
   }
 
-  int count = call_pv(name, gimme);
+  int count = call_pv(name, gimme | G_EVAL);
 
   SPAGAIN;
+
+  if (SvTRUE(ERRSV)) {
+    zeroperl_capture_error();
+    FREETMPS;
+    LEAVE;
+    return NULL;
+  }
 
   zeroperl_result *result = (zeroperl_result *)malloc(sizeof(zeroperl_result));
   if (!result) {
