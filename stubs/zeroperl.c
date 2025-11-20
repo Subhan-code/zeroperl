@@ -598,13 +598,9 @@ static void zeroperl_clear_error_internal(void) {
 //! XS callback that dispatches to host functions
 static XS(xs_host_dispatch) {
   dXSARGS;
-
-  if (!items) {
-    croak("No magic value found for host function");
-  }
-
+  
   int32_t func_id = (int32_t)CvXSUBANY(cv).any_i32;
-
+  
   zeroperl_value **argv = NULL;
   if (items > 0) {
     argv = (zeroperl_value **)malloc(sizeof(zeroperl_value *) * items);
@@ -614,9 +610,9 @@ static XS(xs_host_dispatch) {
       SvREFCNT_inc(argv[i]->sv);
     }
   }
-
+  
   zeroperl_value *result = host_call_function(func_id, items, argv);
-
+  
   if (argv) {
     for (int i = 0; i < items; i++) {
       SvREFCNT_dec(argv[i]->sv);
@@ -624,12 +620,19 @@ static XS(xs_host_dispatch) {
     }
     free(argv);
   }
-
+  
   if (result && result->sv) {
-    ST(0) = sv_2mortal(SvREFCNT_inc(result->sv));
+    SV *sv = result->sv;
+    SvREFCNT_inc(sv);
+    free(result);
+    ST(0) = sv_2mortal(sv);
     XSRETURN(1);
   }
-
+  
+  if (result) {
+    free(result);
+  }
+  
   XSRETURN_UNDEF;
 }
 
