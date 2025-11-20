@@ -1115,6 +1115,7 @@ zeroperl_value *zeroperl_new_double(double d) {
 }
 
 //! Create a new string value (UTF-8)
+
 ZEROPERL_API("zeroperl_new_string")
 zeroperl_value *zeroperl_new_string(const char *str, size_t len) {
   if (!zero_perl || !zero_perl_can_evaluate) {
@@ -1981,16 +1982,17 @@ void zeroperl_register_method(int32_t func_id, const char *package,
   entry->is_method = true;
 }
 
-//! Call a Perl subroutine
-//!
-//! Returns a result structure containing the return values. The caller must
-//! free the result with zeroperl_result_free().
-ZEROPERL_API("zeroperl_call")
-zeroperl_result *zeroperl_call(const char *name, zeroperl_context_type context,
-                               int argc, zeroperl_value **argv) {
-  if (!zero_perl || !zero_perl_can_evaluate || !name) {
-    return NULL;
+//! Internal callback for calling Perl subroutines
+static int zeroperl_call_callback(int argc, char **argv) {
+  (void)argc;
+  zeroperl_context *ctx = (zeroperl_context *)argv;
+
+  if (!zero_perl || !zero_perl_can_evaluate) {
+    ctx->result = -1;
+    return -1;
   }
+
+  zeroperl_clear_error_internal();
 
   dTHX;
   dSP;
@@ -2000,16 +2002,16 @@ zeroperl_result *zeroperl_call(const char *name, zeroperl_context_type context,
 
   PUSHMARK(SP);
 
-  for (int i = 0; i < argc; i++) {
-    if (argv[i] && argv[i]->sv) {
-      XPUSHs(sv_2mortal(SvREFCNT_inc(argv[i]->sv)));
+  for (int i = 0; i < ctx->data.call.argc; i++) {
+    if (ctx->data.call.argv[i] && ctx->data.call.argv[i]->sv) {
+      XPUSHs(sv_2mortal(SvREFCNT_inc(ctx->data.call.argv[i]->sv)));
     }
   }
 
   PUTBACK;
 
   I32 gimme;
-  switch (context) {
+  switch (ctx->data.call.context) {
   case ZEROPERL_VOID:
     gimme = G_VOID;
     break;
@@ -2022,22 +2024,25 @@ zeroperl_result *zeroperl_call(const char *name, zeroperl_context_type context,
     break;
   }
 
-  int count = call_pv(name, gimme | G_EVAL);
+  int count = call_pv(ctx->data.call.name, gimme | G_EVAL);
 
   SPAGAIN;
 
+  // Check if an error occurred
   if (SvTRUE(ERRSV)) {
     zeroperl_capture_error();
+    ctx->result = -1;
     FREETMPS;
     LEAVE;
-    return NULL;
+    return -1;
   }
 
   zeroperl_result *result = (zeroperl_result *)malloc(sizeof(zeroperl_result));
   if (!result) {
+    ctx->result = -1;
     FREETMPS;
     LEAVE;
-    return NULL;
+    return -1;
   }
 
   result->count = count;
@@ -2047,9 +2052,10 @@ zeroperl_result *zeroperl_call(const char *name, zeroperl_context_type context,
         (zeroperl_value **)malloc(sizeof(zeroperl_value *) * count);
     if (!result->values) {
       free(result);
+      ctx->result = -1;
       FREETMPS;
       LEAVE;
-      return NULL;
+      return -1;
     }
 
     for (int i = count - 1; i >= 0; i--) {
@@ -2069,7 +2075,38 @@ zeroperl_result *zeroperl_call(const char *name, zeroperl_context_type context,
   FREETMPS;
   LEAVE;
 
-  return result;
+  // Store result pointer in context (caller will retrieve it)
+  *((zeroperl_result **)&ctx->result) = result;
+  return 0;
+}
+
+//! Call a Perl subroutine
+//!
+//! Returns a result structure containing the return values. The caller must
+//! free the result with zeroperl_result_free().
+ZEROPERL_API("zeroperl_call")
+zeroperl_result *zeroperl_call(const char *name, zeroperl_context_type context,
+                               int argc, zeroperl_value **argv) {
+  if (!zero_perl || !zero_perl_can_evaluate || !name) {
+    return NULL;
+  }
+
+  zeroperl_context ctx = {
+      .op_type = ZEROPERL_OP_CALL,
+      .result = 0,
+      .data.call = {
+          .name = name,
+          .argc = argc,
+          .argv = argv,
+          .context = context}};
+
+  int status = asyncjmp_rt_start(zeroperl_call_callback, 0, (char **)&ctx);
+  
+  if (status != 0) {
+    return NULL;
+  }
+
+  return *((zeroperl_result **)&ctx.result);
 }
 
 //! Get a value from a result by index
