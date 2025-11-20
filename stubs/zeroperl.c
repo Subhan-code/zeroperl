@@ -967,6 +967,15 @@ void zeroperl_shutdown(void) {
   }
 }
 
+//! Clear the error state ($@)
+//! 
+//! Clears both the internal error buffer and the Perl $@ variable.
+ZEROPERL_API("zeroperl_clear_error")
+void zeroperl_clear_error(void) {
+  zero_perl_error_buf[0] = '\0';
+  zeroperl_clear_error_internal();
+}
+
 //! Reset the interpreter to a clean state
 //! 
 //! Destructs and reconstructs the interpreter, clearing all Perl state.
@@ -999,15 +1008,6 @@ int zeroperl_reset(void) {
 ZEROPERL_API("zeroperl_last_error")
 const char *zeroperl_last_error(void) {
   return zero_perl_error_buf;
-}
-
-//! Clear the error state ($@)
-//! 
-//! Clears both the internal error buffer and the Perl $@ variable.
-ZEROPERL_API("zeroperl_clear_error")
-void zeroperl_clear_error(void) {
-  zero_perl_error_buf[0] = '\0';
-  zeroperl_clear_error_internal();
 }
 
 //! Check if the interpreter is currently initialized
