@@ -595,7 +595,7 @@ jobs:
           sudo mv /opt/binaryen/bin/wasm-opt-backup /opt/binaryen/bin/wasm-opt
             
           which wasm-opt
-          wasm-opt zeroperl_reactor.wasm -O3 -g --strip-dwarf --enable-bulk-memory --enable-nontrapping-float-to-int --asyncify --pass-arg=asyncify-imports@wasi_snapshot_preview1.fd_read -o zeroperl.wasm
+          wasm-opt zeroperl_reactor.wasm -O3 -g --strip-dwarf --enable-bulk-memory --enable-nontrapping-float-to-int --asyncify --pass-arg=asyncify-imports@wasi_snapshot_preview1.fd_read,env.call_host_function -o zeroperl.wasm
 
       - name: Upload Prefix (WASI build)
         uses: actions/upload-artifact@v4
