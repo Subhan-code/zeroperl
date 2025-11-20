@@ -65,6 +65,8 @@ static bool zero_perl_can_evaluate = false; // perl_run called, ready for eval
 
 //! Error message buffer (stores last Perl error from $@)
 static char zero_perl_error_buf[1024] = {0};
+//! Host error message buffer (stores last host error)
+static char host_error_buf[1024] = {0};
 
 //! Environment variables
 extern char **environ;
@@ -595,11 +597,33 @@ static void zeroperl_clear_error_internal(void) {
   sv_setpvn(ERRSV, "", 0);
 }
 
+ZEROPERL_API("zeroperl_set_host_error")
+void zeroperl_set_host_error(const char *error) {
+  if (error) {
+    strncpy(host_error_buf, error, sizeof(host_error_buf) - 1);
+    host_error_buf[sizeof(host_error_buf) - 1] = '\0';
+  } else {
+    host_error_buf[0] = '\0';
+  }
+}
+
+ZEROPERL_API("zeroperl_get_host_error")
+const char *zeroperl_get_host_error(void) {
+  return host_error_buf;
+}
+
+ZEROPERL_API("zeroperl_clear_host_error")
+void zeroperl_clear_host_error(void) {
+  host_error_buf[0] = '\0';
+}
+
 //! XS callback that dispatches to host functions
 static XS(xs_host_dispatch) {
   dXSARGS;
   
   int32_t func_id = (int32_t)CvXSUBANY(cv).any_i32;
+  
+  zeroperl_clear_host_error();
   
   zeroperl_value **argv = NULL;
   if (items > 0) {
@@ -621,19 +645,24 @@ static XS(xs_host_dispatch) {
     free(argv);
   }
   
-  if (result && result->sv) {
-    SV *sv = result->sv;
-    SvREFCNT_inc(sv);
-    free(result);
-    ST(0) = sv_2mortal(sv);
-    XSRETURN(1);
+  if (!result || !result->sv) {
+    if (result) {
+      free(result);
+    }
+    
+    const char *host_err = zeroperl_get_host_error();
+    if (host_err && host_err[0] != '\0') {
+      croak("%s", host_err);
+    }
+    
+    XSRETURN_UNDEF;
   }
   
-  if (result) {
-    free(result);
-  }
-  
-  XSRETURN_UNDEF;
+  SV *sv = result->sv;
+  SvREFCNT_inc(sv);
+  free(result);
+  ST(0) = sv_2mortal(sv);
+  XSRETURN(1);
 }
 
 //! Internal callback for initialization
