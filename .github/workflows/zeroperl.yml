@@ -10,7 +10,7 @@ on:
       exiftool-version:
         description: "Version of ExifTool to build"
         required: false
-        default: "13.41"
+        default: "13.42"
       stack-size:
         description: "WASM stack size (in bytes)"
         required: false
@@ -509,14 +509,20 @@ jobs:
 
 
           wasic \
-          -o zeroperl_unopt \
+          -o zeroperl_reactor.wasm \
           -flto \
           -g \
+          -mexec-model=reactor \
           -z stack-size=${{ inputs.stack-size }} -Wl,--initial-memory=${{ inputs.initial-memory }} \
           -static \
+          -Wl,--no-entry \
+          -Wl,--stack-first \
+          -Wl,--export-dynamic \
           -Wl,--export=__stack_pointer \
           -Wl,--export=__memory_base \
           -Wl,--export=__table_base \
+          -Wl,--export=malloc \
+          -Wl,--export=free \
           -DNO_MATHOMS \
           -D_WASI_EMULATED_PROCESS_CLOCKS -lwasi-emulated-process-clocks \
           -D_WASI_EMULATED_GETPID -lwasi-emulated-getpid \
@@ -589,7 +595,7 @@ jobs:
           sudo mv /opt/binaryen/bin/wasm-opt-backup /opt/binaryen/bin/wasm-opt
             
           which wasm-opt
-          wasm-opt zeroperl_unopt -O3 -g --strip-dwarf --enable-bulk-memory --enable-nontrapping-float-to-int --asyncify --pass-arg=asyncify-imports@wasi_snapshot_preview1.fd_read -o zeroperl.wasm
+          wasm-opt zeroperl_reactor.wasm -O3 -g --strip-dwarf --enable-bulk-memory --enable-nontrapping-float-to-int --asyncify --pass-arg=asyncify-imports@wasi_snapshot_preview1.fd_read,env.call_host_function -o zeroperl.wasm
 
       - name: Upload Prefix (WASI build)
         uses: actions/upload-artifact@v4
@@ -597,10 +603,11 @@ jobs:
           name: perl-wasi-prefix
           path: /zeroperl
 
-      - name: Upload Additional Artifacts
+      - name: Upload Reactor Library
         uses: actions/upload-artifact@v4
         with:
+          name: zeroperl-reactor
           path: |
             wasm/config.h
             wasm/zeroperl.wasm
-            wasm/zeroperl_unopt
+            wasm/zeroperl_reactor.wasm
