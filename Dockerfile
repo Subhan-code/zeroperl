@@ -20,7 +20,7 @@ WORKDIR /build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential curl xz-utils zlib1g-dev libbz2-dev ca-certificates \
-    clang llvm lld nodejs patch perl \
+    clang llvm lld nodejs patch perl python3 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN ARCH=$(uname -m) && \
