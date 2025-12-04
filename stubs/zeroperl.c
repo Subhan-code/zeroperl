@@ -900,6 +900,11 @@ static int zeroperl_reset_callback(int argc, char **argv) {
   PL_exit_flags &= ~PERL_EXIT_DESTRUCT_END;
   zero_perl_can_evaluate = false;
 
+  // Reset opfreehook to prevent glob_ophook from chaining to itself
+  // after interpreter reset (the static my_cxt in File::Glob retains
+  // its old value across resets in non-MULTIPLICITY builds)
+  PL_opfreehook = NULL;
+
   if (ctx->data.init.argc > 0 && ctx->data.init.argv) {
     if (perl_parse(zero_perl, xs_init, ctx->data.init.argc, ctx->data.init.argv,
                    environ) != 0) {
@@ -2201,7 +2206,6 @@ void zeroperl_result_free(zeroperl_result *result) {
 }
 
 EXTERN_C void boot_DynaLoader(pTHX_ CV *cv);
-EXTERN_C void boot_File__DosGlob(pTHX_ CV *cv);
 EXTERN_C void boot_File__Glob(pTHX_ CV *cv);
 EXTERN_C void boot_Sys__Hostname(pTHX_ CV *cv);
 EXTERN_C void boot_PerlIO__via(pTHX_ CV *cv);
@@ -2245,7 +2249,6 @@ static void xs_init(pTHX) {
   PERL_UNUSED_CONTEXT;
 
   newXS("DynaLoader::boot_DynaLoader", boot_DynaLoader, file);
-  newXS("File::DosGlob::bootstrap", boot_File__DosGlob, file);
   newXS("File::Glob::bootstrap", boot_File__Glob, file);
   newXS("Sys::Hostname::bootstrap", boot_Sys__Hostname, file);
   newXS("PerlIO::via::bootstrap", boot_PerlIO__via, file);
