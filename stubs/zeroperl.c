@@ -6,6 +6,7 @@
 #include "asyncify.h"
 #include "perl.h"
 #include "setjmp.h"
+#include "async_web_api.h"
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -554,6 +555,16 @@ typedef struct {
 ZEROPERL_IMPORT("call_host_function")
 zeroperl_value *host_call_function(int32_t func_id, int32_t argc,
                                    zeroperl_value **argv);
+
+// Import functions from JavaScript for async operations
+ZEROPERL_IMPORT("js_async_fetch")
+int32_t js_async_fetch(const char *url, const char *method, const char *headers, const char *body);
+
+ZEROPERL_IMPORT("js_async_timer")
+int32_t js_async_timer(int32_t delay_ms);
+
+ZEROPERL_IMPORT("js_async_resolve_pending")
+bool js_async_resolve_pending(void);
 
 //! Registry for host function IDs
 typedef struct {
@@ -2285,4 +2296,83 @@ static void xs_init(pTHX) {
   newXS("Fcntl::bootstrap", boot_Fcntl, file);
   newXS("Opcode::bootstrap", boot_Opcode, file);
   newXS("Time::HiRes::bootstrap", boot_Time__HiRes, file);
+}
+
+// Async Web API functions
+ZEROPERL_API("async_web_api_init")
+void async_web_api_init(void) {
+    async_registry_init();
+}
+
+ZEROPERL_API("async_fetch")
+int32_t async_fetch(const char *url, const char *method, const char *headers, const char *body) {
+    // Register the operation first
+    int32_t op_id = async_register_operation(ASYNC_OP_FETCH, NULL, 0);
+    if (op_id < 0) {
+        return -1;
+    }
+    
+    // Call the JavaScript function which will start the async operation
+    int32_t js_op_id = js_async_fetch(url, method, headers, body);
+    
+    // Store the JS operation ID as our operation data
+    async_update_operation(op_id, ASYNC_STATE_PENDING, &js_op_id, sizeof(js_op_id), NULL);
+    
+    return op_id;
+}
+
+ZEROPERL_API("async_timer")
+int32_t async_timer(int32_t delay_ms) {
+    // Register the operation first
+    int32_t op_id = async_register_operation(ASYNC_OP_TIMER, NULL, 0);
+    if (op_id < 0) {
+        return -1;
+    }
+    
+    // Call the JavaScript function which will start the timer
+    int32_t js_op_id = js_async_timer(delay_ms);
+    
+    // Store the JS operation ID as our operation data
+    async_update_operation(op_id, ASYNC_STATE_PENDING, &js_op_id, sizeof(js_op_id), NULL);
+    
+    return op_id;
+}
+
+ZEROPERL_API("async_check_status")
+int32_t async_check_status(int32_t op_id, char **out_result, size_t *out_size, char **out_error) {
+    async_state_t state = async_get_operation_state(op_id, (void**)out_result, out_size, out_error);
+    return (int32_t)state;
+}
+
+ZEROPERL_API("async_wait_for_completion")
+bool async_wait_for_completion(int32_t op_id) {
+    // This function will be called from Perl to wait for completion
+    // The actual waiting is handled by asyncify
+    async_state_t state;
+    do {
+        // Check if JavaScript has resolved any pending operations
+        js_async_resolve_pending();
+        
+        // Check our operation state
+        state = async_get_operation_state(op_id, NULL, NULL, NULL);
+        
+        if (state == ASYNC_STATE_PENDING) {
+            // If still pending, yield control back to JavaScript
+            // This will be handled by the asyncify mechanism
+            void *buf;
+            if (asyncify_get_state() == 0) {  // ASYNCIFY_NORMAL
+                // Start unwinding to wait for the async operation
+                asyncify_start_unwind(&buf);
+            }
+            // When JavaScript resolves the operation, it will rewind here
+        }
+        
+    } while (state == ASYNC_STATE_PENDING);
+    
+    return state == ASYNC_STATE_RESOLVED;
+}
+
+ZEROPERL_API("async_cleanup")
+void async_cleanup(int32_t op_id) {
+    async_remove_operation(op_id);
 }

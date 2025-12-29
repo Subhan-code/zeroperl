@@ -31,6 +31,7 @@ CFLAGS="-c -O3 -flto -DNO_MATHOMS -D_WASI_EMULATED_PROCESS_CLOCKS -D_WASI_EMULAT
 
 wasic $CFLAGS zeroperl.c -o zeroperl.o
 wasic $CFLAGS "$REPO_DIR/stubs/stubs.c" -o stubs.o
+wasic $CFLAGS "$REPO_DIR/stubs/async_web_api.c" -o async_web_api.o
 
 CFLAGS_DATA="-c -O0 -std=c23 \
 -I. -I$REPO_DIR/stubs -I$REPO_DIR/gen -cxx-isystem /opt/wasi-sdk/share/wasi-sysroot/include"
@@ -59,7 +60,7 @@ wasic \
     -lwasi-emulated-mman \
     -Wl,--strip-all \
     -Wl,--allow-undefined \
-    zeroperl.o stubs.o zeroperl_data.o \
+    zeroperl.o stubs.o async_web_api.o zeroperl_data.o
     -Wl,--whole-archive "$REPO_DIR/stubs/libasyncjmp.a" -Wl,--no-whole-archive \
     -Wl,--whole-archive libperl.a -Wl,--no-whole-archive \
     -Wl,--wrap=fopen -Wl,--wrap=open -Wl,--wrap=close -Wl,--wrap=read \
@@ -108,7 +109,7 @@ wasic \
 if [ "$ASYNCIFY" = "true" ]; then
     wasm-opt zeroperl_reactor.wasm -O3 -g --strip-dwarf --enable-bulk-memory \
         --enable-nontrapping-float-to-int --asyncify \
-        --pass-arg=asyncify-imports@wasi_snapshot_preview1.fd_read,env.call_host_function \
+        --pass-arg=asyncify-imports@wasi_snapshot_preview1.fd_read,env.call_host_function,env.js_async_fetch,env.js_async_timer,env.js_async_resolve_pending
         -o zeroperl.wasm
 else
     wasm-opt zeroperl_reactor.wasm -g --strip-dwarf --enable-bulk-memory \
